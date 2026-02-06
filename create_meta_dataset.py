@@ -9,64 +9,66 @@ def collect_log_data():
     predict_logs = []
     evaluate_logs = []
 
-    for data_set_folder in Path("./").iterdir():
-        if data_set_folder.is_file():
+    for data_sets_folder in Path("./").iterdir():
+        if data_sets_folder.is_file():
             continue
-        data_set_name = data_set_folder.name
-        print(data_set_name)
-        for algorithm_folder in data_set_folder.iterdir():
-            if algorithm_folder.is_file():
+        for data_set_folder in data_sets_folder.iterdir():
+            if data_set_folder.is_file():
                 continue
-            if "checkpoint" in algorithm_folder.name:
-                algorithm_name = algorithm_folder.name.split("_")[-1]
-                for config_folder in algorithm_folder.iterdir():
-                    if config_folder.is_file():
-                        continue
-                    if "config" in config_folder.name:
-                        for fold_folder in config_folder.iterdir():
-                            if fold_folder.is_file():
-                                continue
-                            if "fold" in fold_folder.name:
-                                fold_name = fold_folder.name.split("_")[-1]
-                                if (fold_folder / "fit_log.json").exists():
-                                    with open(fold_folder / "fit_log.json", "r") as file:
-                                        fit_log = {
-                                            "data_set_name": data_set_name,
-                                            "algorithm_name": algorithm_name,
-                                            "fold_name": fold_name
-                                        }
-                                        content = json.load(file)
-                                        fit_log.update(content)
-                                        fit_logs.append(fit_log)
-                                if (fold_folder / "predict_log.json").exists():
-                                    with open(fold_folder / "predict_log.json", "r") as file:
-                                        predict_log = {
-                                            "data_set_name": data_set_name,
-                                            "algorithm_name": algorithm_name,
-                                            "fold_name": fold_name
-                                        }
-                                        content = json.load(file)
-                                        predict_log.update(content)
-                                        predict_logs.append(predict_log)
-                                if (fold_folder / "evaluate_log.json").exists():
-                                    with open(fold_folder / "evaluate_log.json", "r") as file:
-                                        evaluate_log = {
-                                            "data_set_name": data_set_name,
-                                            "algorithm_name": algorithm_name,
-                                            "fold_name": fold_name
-                                        }
-                                        content = json.load(file)
-                                        evaluate_log.update(content)
-                                        evaluate_logs.append(evaluate_log)
-            if "atomic" in algorithm_folder.name:
-                if (algorithm_folder / "metadata.json").exists():
-                    with open(algorithm_folder / "metadata.json", "r") as file:
-                        metadata_log = {
-                            "data_set_name": data_set_name
-                        }
-                        content = json.load(file)
-                        metadata_log.update(content)
-                        metadata_logs.append(metadata_log)
+            data_set_name = data_set_folder.name
+            for algorithm_folder in data_set_folder.iterdir():
+                if algorithm_folder.is_file():
+                    continue
+                if "checkpoint" in algorithm_folder.name:
+                    algorithm_name = algorithm_folder.name.split("_")[-1]
+                    for config_folder in algorithm_folder.iterdir():
+                        if config_folder.is_file():
+                            continue
+                        if "config" in config_folder.name:
+                            for fold_folder in config_folder.iterdir():
+                                if fold_folder.is_file():
+                                    continue
+                                if "fold" in fold_folder.name:
+                                    fold_name = fold_folder.name.split("_")[-1]
+                                    if (fold_folder / "fit_log.json").exists():
+                                        with open(fold_folder / "fit_log.json", "r") as file:
+                                            fit_log = {
+                                                "data_set_name": data_set_name,
+                                                "algorithm_name": algorithm_name,
+                                                "fold_name": fold_name
+                                            }
+                                            content = json.load(file)
+                                            fit_log.update(content)
+                                            fit_logs.append(fit_log)
+                                    if (fold_folder / "predict_log.json").exists():
+                                        with open(fold_folder / "predict_log.json", "r") as file:
+                                            predict_log = {
+                                                "data_set_name": data_set_name,
+                                                "algorithm_name": algorithm_name,
+                                                "fold_name": fold_name
+                                            }
+                                            content = json.load(file)
+                                            predict_log.update(content)
+                                            predict_logs.append(predict_log)
+                                    if (fold_folder / "evaluate_log.json").exists():
+                                        with open(fold_folder / "evaluate_log.json", "r") as file:
+                                            evaluate_log = {
+                                                "data_set_name": data_set_name,
+                                                "algorithm_name": algorithm_name,
+                                                "fold_name": fold_name
+                                            }
+                                            content = json.load(file)
+                                            evaluate_log.update(content)
+                                            evaluate_logs.append(evaluate_log)
+                if "atomic" in algorithm_folder.name:
+                    if (algorithm_folder / "metadata.json").exists():
+                        with open(algorithm_folder / "metadata.json", "r") as file:
+                            metadata_log = {
+                                "data_set_name": data_set_name
+                            }
+                            content = json.load(file)
+                            metadata_log.update(content)
+                            metadata_logs.append(metadata_log)
 
     metadata = pd.DataFrame(metadata_logs)
     fit = pd.DataFrame(fit_logs)
@@ -92,7 +94,7 @@ def merge_log_data():
                       suffixes=("", "_drop"))
     merged.drop([col for col in merged.columns if "_drop" in col], axis=1, inplace=True)
 
-    merged.drop(columns=["fold_name", "fold", "model_file", "algorithm_configuration"], inplace=True)
+    merged.drop(columns=["fold_name", "fold", "model_file", "algorithm_configuration", "pipeline_file"], inplace=True)
 
     merged.to_csv("merged.csv", index=False)
 
