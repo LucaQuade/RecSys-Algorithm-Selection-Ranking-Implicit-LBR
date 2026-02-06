@@ -9,6 +9,8 @@ if __name__ == "__main__":
     parser.add_argument('--algorithm_name', dest='algorithm_name', type=str, required=True)
     parser.add_argument('--algorithm_config', dest='algorithm_config', type=int, required=True)
     parser.add_argument('--fold', dest='fold', type=int, required=True)
+    parser.add_argument('--num_samples', dest='num_samples', type=int, required=False)
+    parser.add_argument('--seed', dest='seed', type=int, required=False)
     args = parser.parse_args()
 
     if args.algorithm_name in recbole_algorithm_names:

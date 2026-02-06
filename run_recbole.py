@@ -17,7 +17,7 @@ from algorithm_config import retrieve_configurations
 from recbole.utils.case_study import full_sort_topk
 
 
-def recbole_fit(data_set_name, algorithm_name, algorithm_config, fold, **kwargs):
+def recbole_fit(data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     setup_start_time = time.time()
 
     print(f"CUDA available: {torch.cuda.is_available()}")
@@ -80,7 +80,7 @@ def recbole_fit(data_set_name, algorithm_name, algorithm_config, fold, **kwargs)
         "dataset": data_set_name,  # default: None
     }
 
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
     config_dict.update(configurations[algorithm_config])
 
     config = Config(config_dict=config_dict)
@@ -152,13 +152,13 @@ def recbole_fit(data_set_name, algorithm_name, algorithm_config, fold, **kwargs)
         json.dump(fit_log_dict, file, indent=4)
 
 
-def recbole_predict(data_set_name, algorithm_name, algorithm_config, fold, **kwargs):
+def recbole_predict(data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     print(f"CUDA available: {torch.cuda.is_available()}")
     print(f"CUDA version: {torch.version.cuda}")
     print(f"CUDNN version: {torch.backends.cudnn.version()}")
     print(f"PyTorch version: {torch.__version__}")
 
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     fit_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                     f"config_{algorithm_config}/fold_{fold}/fit_log.json")
@@ -214,13 +214,13 @@ def recbole_predict(data_set_name, algorithm_name, algorithm_config, fold, **kwa
         json.dump(predict_log_dict, file, indent=4)
 
 
-def recbole_evaluate(data_set_name, algorithm_name, algorithm_config, fold, **kwargs):
+def recbole_evaluate(data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     print(f"CUDA available: {torch.cuda.is_available()}")
     print(f"CUDA version: {torch.version.cuda}")
     print(f"CUDNN version: {torch.backends.cudnn.version()}")
     print(f"PyTorch version: {torch.__version__}")
 
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     predict_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                         f"config_{algorithm_config}/fold_{fold}/predict_log.json")

@@ -40,13 +40,13 @@ def lenskit_load_transform(data_set_name, fold, partition):
 
     return data
 
-def lenskit_fit(mode, data_set_name, algorithm_name, algorithm_config, fold):
+def lenskit_fit(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     setup_start_time = time.time()
 
     data = lenskit_load_transform(data_set_name, fold, "train")
     train = from_interactions_df(data, user_col='user', item_col='item', rating_col='rating')
 
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
     current_configuration = configurations[algorithm_config]
 
     predict_rating = False
@@ -130,7 +130,7 @@ def lenskit_fit(mode, data_set_name, algorithm_name, algorithm_config, fold):
 
 
 def lenskit_predict(mode, data_set_name, algorithm_name, algorithm_config, fold):
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     fit_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                     f"config_{algorithm_config}/fold_{fold}/fit_log.json")
@@ -197,8 +197,8 @@ def lenskit_predict(mode, data_set_name, algorithm_name, algorithm_config, fold)
         json.dump(predict_log_dict, file, indent=4)
 
 
-def lenskit_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold):
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+def lenskit_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     predict_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                         f"config_{algorithm_config}/fold_{fold}/predict_log.json")

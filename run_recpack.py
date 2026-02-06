@@ -73,12 +73,12 @@ def recpack_load_transform(data_set_name, fold, csr_split):
     return train_csr, valid_csr, test_csr, train, valid, test
 
 
-def recpack_fit(mode, data_set_name, algorithm_name, algorithm_config, fold):
+def recpack_fit(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     setup_start_time = time.time()
 
     train, _, _, _, _, _ = recpack_load_transform(data_set_name, fold, 1)
 
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
     current_configuration = configurations[algorithm_config]
 
     if algorithm_name == "SVD":
@@ -142,8 +142,8 @@ def recpack_fit(mode, data_set_name, algorithm_name, algorithm_config, fold):
         json.dump(fit_log_dict, file, indent=4)
 
 
-def recpack_predict(mode, data_set_name, algorithm_name, algorithm_config, fold):
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+def recpack_predict(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     fit_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                     f"config_{algorithm_config}/fold_{fold}/fit_log.json")
@@ -205,8 +205,8 @@ def recpack_predict(mode, data_set_name, algorithm_name, algorithm_config, fold)
         json.dump(predict_log_dict, file, indent=4)
 
 
-def recpack_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold):
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+def recpack_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     predict_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                         f"config_{algorithm_config}/fold_{fold}/predict_log.json")
