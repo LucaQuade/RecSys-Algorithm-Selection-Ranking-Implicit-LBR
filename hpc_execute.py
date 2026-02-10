@@ -9,7 +9,7 @@ from settings import cluster_email
 from algorithm_config import retrieve_configurations
 
 
-def execute(mode):
+def execute(mode, num_samples, seed):
     num_folds = 5
 
     skip_outfile_exists = True
@@ -17,7 +17,7 @@ def execute(mode):
 
     num_configurations = 0
     for algorithm_name in algorithm_names:
-        num_configurations += len(retrieve_configurations(algorithm_name=algorithm_name))
+        num_configurations += len(retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed))
     num_jobs = len(data_set_names) * num_configurations * num_folds
     job_counter = 0
 
@@ -31,7 +31,7 @@ def execute(mode):
                 resource = "cpu"
             else:
                 raise ValueError(f"Algorithm {algorithm_name} not found.")
-            configurations = retrieve_configurations(algorithm_name=algorithm_name)
+            configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
             for algorithm_config_index in range(len(configurations)):
                 for fold in range(num_folds):
                     job_counter += 1
@@ -130,7 +130,9 @@ def execute(mode):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("HPC Execute")
     parser.add_argument('--mode', type=str, required=True)
+    parser.add_argument('--num_samples', dest='num_samples', type=int, required=False)
+    parser.add_argument('--seed', dest='seed', type=int, required=False)
 
     args = parser.parse_args()
 
-    execute(args.mode)
+    execute(args.mode, args.num_samples, args.seed)
