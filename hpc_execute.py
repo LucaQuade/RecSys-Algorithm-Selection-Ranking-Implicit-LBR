@@ -121,7 +121,7 @@ def execute(mode, num_samples, seed):
                              "singularity exec --nv --pwd /mnt --bind ./:/mnt ./data_loader.sif python -u " \
                              f"./execution_master.py --mode {mode} --data_set_name {data_set_name} " \
                              f"--algorithm_name {algorithm_name} --algorithm_config {algorithm_config_index} " \
-                             f"--fold {fold}\n"
+                             f"--fold {fold} --num_samples {num_samples} --seed {seed}\n"
                     script_name = f"__RSDL_{mode}_{data_set_name}_{algorithm_name}_{fold}_{algorithm_config_index}.sh"
                     subprocess.run(["sbatch", "-J", script_name], input=script, universal_newlines=True)
                     print(f"Submitted job {job_counter}/{num_jobs}.")
@@ -130,8 +130,8 @@ def execute(mode, num_samples, seed):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("HPC Execute")
     parser.add_argument('--mode', type=str, required=True)
-    parser.add_argument('--num_samples', dest='num_samples', type=int, required=False)
-    parser.add_argument('--seed', dest='seed', type=int, required=False)
+    parser.add_argument('--num_samples', type=int, default=2)
+    parser.add_argument('--seed', type=int, default=0)
 
     args = parser.parse_args()
 
