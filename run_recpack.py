@@ -221,12 +221,13 @@ def recpack_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold
         top_k_dict = json.load(file)
 
     top_k_dict = {int(k): v[0] for k, v in top_k_dict.items()}
+    
     k_options = [1, 3, 5, 10, 20]
 
     start_evaluation = time.time()
-    ndcg_per_user_per_k = ndcg(top_k_dict, k_options, test, "user_id:token", "item_id:token")
-    hr_per_user_per_k = hr(top_k_dict, k_options, test, "user_id:token", "item_id:token")
-    recall_per_user_per_k = recall(top_k_dict, k_options, test, "user_id:token", "item_id:token")
+
+    mean_ndcg_per_k, mean_hr_per_k, mean_recall_per_k = metrics_lenskit(top_k_dict, k_options, test, "user_id:token", "item_id:token")
+
     end_evaluation = time.time()
 
     evaluate_log_dict = {
@@ -240,13 +241,13 @@ def recpack_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold
     }
 
     for k in k_options:
-        score = sum(ndcg_per_user_per_k[k]) / len(ndcg_per_user_per_k[k])
+        score = mean_ndcg_per_k[k]
         print(f"NDCG@{k}: {score}")
         evaluate_log_dict[f"NDCG@{k}"] = score
-        score = sum(hr_per_user_per_k[k]) / len(hr_per_user_per_k[k])
+        score = mean_hr_per_k[k]
         print(f"HR@{k}: {score}")
         evaluate_log_dict[f"HR@{k}"] = score
-        score = sum(recall_per_user_per_k[k]) / len(recall_per_user_per_k[k])
+        score = mean_recall_per_k[k]
         print(f"Recall@{k}: {score}")
         evaluate_log_dict[f"Recall@{k}"] = score
 
