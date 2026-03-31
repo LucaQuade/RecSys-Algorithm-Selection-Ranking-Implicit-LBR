@@ -10,14 +10,14 @@ from recbole.config import Config
 from recbole.data import create_dataset, data_preparation
 from recbole.quick_start import load_data_and_model
 from recbole.utils import ModelType, get_model, get_trainer, init_seed, init_logger
-from run_utils import ndcg, hr, recall
+from run_utils import ndcg, hr, recall, metrics_lenskit
 
 import torch
 from algorithm_config import retrieve_configurations
 from recbole.utils.case_study import full_sort_topk
 
 
-def recbole_fit(data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
+def recbole_fit(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     setup_start_time = time.time()
 
     print(f"CUDA available: {torch.cuda.is_available()}")
@@ -152,7 +152,7 @@ def recbole_fit(data_set_name, algorithm_name, algorithm_config, fold, num_sampl
         json.dump(fit_log_dict, file, indent=4)
 
 
-def recbole_predict(data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
+def recbole_predict(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     print(f"CUDA available: {torch.cuda.is_available()}")
     print(f"CUDA version: {torch.version.cuda}")
     print(f"CUDNN version: {torch.backends.cudnn.version()}")
@@ -214,7 +214,7 @@ def recbole_predict(data_set_name, algorithm_name, algorithm_config, fold, num_s
         json.dump(predict_log_dict, file, indent=4)
 
 
-def recbole_evaluate(data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
+def recbole_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     print(f"CUDA available: {torch.cuda.is_available()}")
     print(f"CUDA version: {torch.version.cuda}")
     print(f"CUDNN version: {torch.backends.cudnn.version()}")

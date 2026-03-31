@@ -1,7 +1,10 @@
 import itertools
 import math
+import operator
 import random
 import hashlib
+from functools import reduce
+
 
 def retrieve_configurations(algorithm_name, num_samples=None, seed=None):
     configuration_space = {}
@@ -105,7 +108,7 @@ def retrieve_configurations(algorithm_name, num_samples=None, seed=None):
     keys = list(configuration_space.keys())
     values = list(configuration_space.values())
 
-    max_samples = min(num_samples, math.prod(len(v) for v in configuration_space.values()))
+    max_samples = min(num_samples, reduce(operator.mul, (len(v) for v in configuration_space.values()), 1))
 
     #Randomly generate unique configurations
     samples = set()

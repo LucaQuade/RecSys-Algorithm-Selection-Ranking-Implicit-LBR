@@ -19,7 +19,7 @@ from lenskit.metrics.ranking import NDCG
 from algorithm_config import retrieve_configurations
 import binpickle
 import time
-from run_utils import ndcg, hr, recall
+from run_utils import ndcg, hr, recall, metrics_lenskit
 
 
 def lenskit_load_transform(data_set_name, fold, partition):
@@ -129,7 +129,7 @@ def lenskit_fit(mode, data_set_name, algorithm_name, algorithm_config, fold, num
         json.dump(fit_log_dict, file, indent=4)
 
 
-def lenskit_predict(mode, data_set_name, algorithm_name, algorithm_config, fold):
+def lenskit_predict(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     fit_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"

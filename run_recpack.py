@@ -12,7 +12,7 @@ import pickle as pkl
 
 from algorithm_config import retrieve_configurations
 
-from run_utils import ndcg, hr, recall
+from run_utils import ndcg, hr, recall, metrics_lenskit
 
 
 def recpack_load_transform(data_set_name, fold, csr_split):
@@ -79,9 +79,12 @@ def recpack_fit(mode, data_set_name, algorithm_name, algorithm_config, fold, num
     train, _, _, _, _, _ = recpack_load_transform(data_set_name, fold, 1)
 
     configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
-    current_configuration = configurations[algorithm_config]
+    current_configuration = configurations[algorithm_config].copy()
 
     if algorithm_name == "SVD":
+        n_users, n_items = train.shape
+        max_components = min(n_users, n_items)
+        current_configuration["num_components"] = min(current_configuration["num_components"], max_components)
         model = SVD(**current_configuration, seed=42)
     elif algorithm_name == "NMF":
         model = NMF(**current_configuration, seed=42)
@@ -221,12 +224,13 @@ def recpack_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold
         top_k_dict = json.load(file)
 
     top_k_dict = {int(k): v[0] for k, v in top_k_dict.items()}
-    
+
     k_options = [1, 3, 5, 10, 20]
 
     start_evaluation = time.time()
 
-    mean_ndcg_per_k, mean_hr_per_k, mean_recall_per_k = metrics_lenskit(top_k_dict, k_options, test, "user_id:token", "item_id:token")
+    mean_ndcg_per_k, mean_hr_per_k, mean_recall_per_k = metrics_lenskit(top_k_dict, k_options, test, "user_id:token",
+                                                                        "item_id:token")
 
     end_evaluation = time.time()
 

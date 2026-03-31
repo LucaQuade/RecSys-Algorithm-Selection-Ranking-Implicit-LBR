@@ -1,5 +1,6 @@
 import numpy as np
-
+from lenskit.data import ItemListCollection, ItemList
+from lenskit.metrics import RunAnalysis, NDCG, Recall, Hit
 
 def ndcg(top_k_dict, k_options, test, user_column, item_column):
     discounted_gain_per_k = np.array([1 / np.log2(i + 1) for i in range(1, max(k_options) + 1)])
