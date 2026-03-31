@@ -5,18 +5,21 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from lenskit.algorithms import Recommender
-from lenskit.algorithms.basic import PopScore, Fallback, Bias
-from lenskit.algorithms.item_knn import ItemItem
-from lenskit.algorithms.user_knn import UserUser
-from lenskit.algorithms.als import ImplicitMF, BiasedMF
-from lenskit.algorithms.funksvd import FunkSVD
+from lenskit import topn_pipeline, recommend, score, RecPipelineBuilder
+from lenskit.basic import FallbackScorer
+from lenskit.data import from_interactions_df, ItemList, ItemListCollection
+from lenskit.basic.popularity import PopScorer as PopScore
+from lenskit.knn.item import ItemKNNScorer as ItemItem
+from lenskit.knn.user import UserKNNScorer as UserUser
+from lenskit.als import ImplicitMFScorer as ImplicitMF, BiasedMFScorer as BiasedMF
+from lenskit.funksvd import FunkSVDScorer as FunkSVD
+from lenskit.metrics import RunAnalysis, RunAnalysisResult
+from lenskit.metrics.ranking import NDCG
 
 from algorithm_config import retrieve_configurations
 import binpickle
 import time
-
-from run_utils import ndcg, hr, recall
+from run_utils import ndcg, hr, recall, metrics_lenskit
 
 
 def lenskit_load_transform(data_set_name, fold, partition):
@@ -34,38 +37,47 @@ def lenskit_load_transform(data_set_name, fold, partition):
         return
 
     data.rename(columns={'user_id:token': 'user', 'item_id:token': 'item', 'rating:float': 'rating'}, inplace=True)
+
     return data
 
-
-def lenskit_fit(mode, data_set_name, algorithm_name, algorithm_config, fold):
+def lenskit_fit(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     setup_start_time = time.time()
 
-    train = lenskit_load_transform(data_set_name, fold, "train")
+    data = lenskit_load_transform(data_set_name, fold, "train")
+    train = from_interactions_df(data, user_col='user', item_col='item', rating_col='rating')
 
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
     current_configuration = configurations[algorithm_config]
 
+    predict_rating = False
+
     if algorithm_name == "PopScore":
-        model = Recommender.adapt(PopScore(**current_configuration))
+        scorer = PopScore(**current_configuration)
     elif algorithm_name == "ItemItem":
-        if "rating" in train.columns:
-            model = Recommender.adapt(Fallback(ItemItem(**current_configuration, feedback="explicit"), Bias()))
+        if "rating" in data.columns:
+            scorer = ItemItem(**current_configuration, feedback="explicit")
+            predict_rating = True
         else:
-            model = Recommender.adapt(ItemItem(**current_configuration, feedback="implicit"))
+            scorer = ItemItem(**current_configuration, feedback="implicit")
     elif algorithm_name == "UserUser":
-        if "rating" in train.columns:
-            model = Recommender.adapt(Fallback(UserUser(**current_configuration, feedback="explicit"), Bias()))
+        if "rating" in data.columns:
+            scorer = UserUser(**current_configuration, feedback="explicit")
+            predict_rating = True
         else:
-            model = Recommender.adapt(UserUser(**current_configuration, feedback="implicit"))
+            scorer = UserUser(**current_configuration, feedback="implicit")
     elif algorithm_name == "ImplicitMF":
-        model = Recommender.adapt(ImplicitMF(**current_configuration, rng_spec=42))
+        scorer = ImplicitMF(**current_configuration, rng_spec=42)
     elif algorithm_name == "BiasedMF":
-        model = Recommender.adapt(Fallback(BiasedMF(**current_configuration, rng_spec=42), Bias()))
+        scorer = BiasedMF(**current_configuration, rng_spec=42)
+        predict_rating = True
     elif algorithm_name == "FunkSVD":
-        model = Recommender.adapt(Fallback(FunkSVD(**current_configuration, random_state=42), Bias()))
+        scorer = FunkSVD(**current_configuration, random_state=42)
+        predict_rating = True
     else:
         print(f"Algorithm {algorithm_name} not found.")
         return
+
+    pipeline = topn_pipeline(scorer=scorer, predicts_ratings=predict_rating)
 
     setup_end_time = time.time()
 
@@ -78,7 +90,7 @@ def lenskit_fit(mode, data_set_name, algorithm_name, algorithm_config, fold):
             print(f"Setup exceeded time limit.")
 
         if os.name == 'nt':
-            model.fit(train)
+            pipeline.train(train)
         elif os.name == 'posix':
             def timeout_fit(signum, frame):
                 raise TimeoutError("Training exceeded time limit.")
@@ -86,22 +98,22 @@ def lenskit_fit(mode, data_set_name, algorithm_name, algorithm_config, fold):
             signal.signal(signal.SIGALRM, timeout_fit)
             signal.alarm(remaining_time)
             try:
-                model.fit(train)
+                pipeline.train(train)
             except TimeoutError:
                 print("Training exceeded time limit.")
                 pass
     else:
-        model.fit(train)
+        pipeline.train(train)
     fit_end_time = time.time()
 
     target_path = f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/config_{algorithm_config}/fold_{fold}/"
     Path(target_path).mkdir(parents=True, exist_ok=True)
     current_time = time.time()
-    model_file = f"{target_path}{algorithm_name}-{current_time}.bpk"
-    binpickle.dump(model, model_file)
+    pipeline_file = f"{target_path}{algorithm_name}-{current_time}.bpk"
+    binpickle.dump(pipeline, pipeline_file)
 
     fit_log_dict = {
-        "model_file": model_file,
+        "pipeline_file": pipeline_file,
         "data_set_name": data_set_name,
         "algorithm_name": algorithm_name,
         "algorithm_config_index": algorithm_config,
@@ -117,22 +129,22 @@ def lenskit_fit(mode, data_set_name, algorithm_name, algorithm_config, fold):
         json.dump(fit_log_dict, file, indent=4)
 
 
-def lenskit_predict(mode, data_set_name, algorithm_name, algorithm_config, fold):
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+def lenskit_predict(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     fit_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                     f"config_{algorithm_config}/fold_{fold}/fit_log.json")
     with open(fit_log_file, "r") as file:
         fit_log = json.load(file)
-    model_file = fit_log["model_file"]
+    pipeline_file = fit_log["pipeline_file"]
 
-    model = binpickle.load(model_file)
+    pipeline = binpickle.load(pipeline_file)
 
-    train = lenskit_load_transform(data_set_name, fold, "train")
-    test = lenskit_load_transform(data_set_name, fold, "test")
+    train_data = lenskit_load_transform(data_set_name, fold, "train")
+    test_data = lenskit_load_transform(data_set_name, fold, "test")
 
     predict_log_dict = {
-        "model_file": model_file,
+        "pipeline_file": pipeline_file,
         "data_set_name": data_set_name,
         "algorithm_name": algorithm_name,
         "algorithm_config_index": algorithm_config,
@@ -140,16 +152,19 @@ def lenskit_predict(mode, data_set_name, algorithm_name, algorithm_config, fold)
         "fold": fold
     }
 
-    if "rating" not in train.columns:
-        unique_train_users = train["user"].unique()
-        unique_test_users = test["user"].unique()
+    if "rating" not in train_data.columns:
+        unique_train_users = train_data["user"].unique()
+        unique_test_users = test_data["user"].unique()
         users_to_predict = np.intersect1d(unique_test_users, unique_train_users)
 
         top_k_dict = {}
+
         start_prediction = time.time()
+
         for user in users_to_predict:
-            predictions = model.recommend(user, n=20)
-            top_k_dict[int(user)] = [predictions["item"].tolist(), predictions["score"].tolist()]
+            predictions = recommend(pipeline=pipeline, query=user, n=20).to_df()
+            top_k_dict[int(user)] = [predictions["item_id"].tolist(), predictions["score"].tolist()]
+
         end_prediction = time.time()
 
         with open(f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
@@ -163,12 +178,13 @@ def lenskit_predict(mode, data_set_name, algorithm_name, algorithm_config, fold)
             "prediction_time": end_prediction - start_prediction
         })
     else:
-        test_interactions = len(test)
+        test_interactions = len(test_data)
         start_prediction = time.time()
-        predictions = model.predict(test.drop(columns="rating"))
+        unique_items = test_data["item"].unique()
+        predictions = score(pipeline=pipeline, query=test_data.drop(columns="rating"), items=unique_items)
         end_prediction = time.time()
 
-        predictions.to_csv(f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
+        predictions.to_df().to_csv(f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                            f"config_{algorithm_config}/fold_{fold}/predictions.csv", index=False)
 
         predict_log_dict.update({
@@ -181,19 +197,19 @@ def lenskit_predict(mode, data_set_name, algorithm_name, algorithm_config, fold)
         json.dump(predict_log_dict, file, indent=4)
 
 
-def lenskit_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold):
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+def lenskit_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     predict_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                         f"config_{algorithm_config}/fold_{fold}/predict_log.json")
     with open(predict_log_file, "r") as file:
         predict_log = json.load(file)
-    model_file = predict_log["model_file"]
+    pipeline_file = predict_log["pipeline_file"]
 
     test = lenskit_load_transform(data_set_name, fold, "test")
 
     evaluate_log_dict = {
-        "model_file": model_file,
+        "pipeline_file": pipeline_file,
         "data_set_name": data_set_name,
         "algorithm_name": algorithm_name,
         "algorithm_config_index": algorithm_config,
@@ -207,24 +223,25 @@ def lenskit_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold
         top_k_dict = json.load(file)
 
     top_k_dict = {int(k): v[0] for k, v in top_k_dict.items()}
+
     k_options = [1, 3, 5, 10, 20]
 
     start_evaluation = time.time()
-    ndcg_per_user_per_k = ndcg(top_k_dict, k_options, test, "user", "item")
-    hr_per_user_per_k = hr(top_k_dict, k_options, test, "user", "item")
-    recall_per_user_per_k = recall(top_k_dict, k_options, test, "user", "item")
+
+    mean_ndcg_per_k, mean_hr_per_k, mean_recall_per_k = metrics_lenskit(top_k_dict, k_options, test, "user", "item")
+
     end_evaluation = time.time()
 
     evaluate_log_dict["evaluation_time"] = end_evaluation - start_evaluation
 
     for k in k_options:
-        score = sum(ndcg_per_user_per_k[k]) / len(ndcg_per_user_per_k[k])
+        score = mean_ndcg_per_k[k]
         print(f"NDCG@{k}: {score}")
         evaluate_log_dict[f"NDCG@{k}"] = score
-        score = sum(hr_per_user_per_k[k]) / len(hr_per_user_per_k[k])
+        score = mean_hr_per_k[k]
         print(f"HR@{k}: {score}")
         evaluate_log_dict[f"HR@{k}"] = score
-        score = sum(recall_per_user_per_k[k]) / len(recall_per_user_per_k[k])
+        score = mean_recall_per_k[k]
         print(f"Recall@{k}: {score}")
         evaluate_log_dict[f"Recall@{k}"] = score
 

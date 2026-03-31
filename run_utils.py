@@ -1,5 +1,6 @@
 import numpy as np
-
+from lenskit.data import ItemListCollection, ItemList
+from lenskit.metrics import RunAnalysis, NDCG, Recall, Hit
 
 def ndcg(top_k_dict, k_options, test, user_column, item_column):
     discounted_gain_per_k = np.array([1 / np.log2(i + 1) for i in range(1, max(k_options) + 1)])
@@ -44,3 +45,37 @@ def recall(top_k_dict, k_options, test, user_column, item_column):
             user_recall = hits[:k].sum() / min(len(positive_test_interactions), k)
             recall_per_user_per_k[k].append(user_recall)
     return recall_per_user_per_k
+    
+def metrics_lenskit(top_k_dict, k_options, test, user_column, item_column):
+    recs = ItemListCollection.empty(['user'])
+
+    for user, items in top_k_dict.items():
+        il = ItemList(item_ids=np.asarray(items, dtype=np.int32), ordered=True)
+        recs.add(il, user)
+
+    test_df = test.rename(columns={item_column: 'item_id', user_column: 'user'})
+    truth = ItemListCollection.from_df(test_df, key='user')
+
+    mean_ndcg_per_k = {}
+    mean_hr_per_k = {}
+    mean_recall_per_k = {}
+
+    rla = RunAnalysis()
+    for k in k_options:
+        rla.add_metric(NDCG(k=k))
+        rla.add_metric(Hit(k=k))
+        rla.add_metric(Recall(k=k))
+
+    results = rla.measure(recs, truth)
+
+    for k in k_options:
+        mean_ndcg = results.list_metrics()[f"NDCG@{k}"].mean()
+        mean_ndcg_per_k[k] = mean_ndcg
+
+        mean_hr = results.list_metrics()[f"Hit@{k}"].mean()
+        mean_hr_per_k[k] = mean_hr
+
+        mean_recall = results.list_metrics()[f"Recall@{k}"].mean()
+        mean_recall_per_k[k] = mean_recall
+
+    return mean_ndcg_per_k, mean_hr_per_k, mean_recall_per_k

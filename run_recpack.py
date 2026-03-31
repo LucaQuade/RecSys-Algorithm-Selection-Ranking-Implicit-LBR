@@ -12,7 +12,7 @@ import pickle as pkl
 
 from algorithm_config import retrieve_configurations
 
-from run_utils import ndcg, hr, recall
+from run_utils import ndcg, hr, recall, metrics_lenskit
 
 
 def recpack_load_transform(data_set_name, fold, csr_split):
@@ -73,15 +73,18 @@ def recpack_load_transform(data_set_name, fold, csr_split):
     return train_csr, valid_csr, test_csr, train, valid, test
 
 
-def recpack_fit(mode, data_set_name, algorithm_name, algorithm_config, fold):
+def recpack_fit(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     setup_start_time = time.time()
 
     train, _, _, _, _, _ = recpack_load_transform(data_set_name, fold, 1)
 
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
-    current_configuration = configurations[algorithm_config]
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
+    current_configuration = configurations[algorithm_config].copy()
 
     if algorithm_name == "SVD":
+        n_users, n_items = train.shape
+        max_components = min(n_users, n_items)
+        current_configuration["num_components"] = min(current_configuration["num_components"], max_components)
         model = SVD(**current_configuration, seed=42)
     elif algorithm_name == "NMF":
         model = NMF(**current_configuration, seed=42)
@@ -142,8 +145,8 @@ def recpack_fit(mode, data_set_name, algorithm_name, algorithm_config, fold):
         json.dump(fit_log_dict, file, indent=4)
 
 
-def recpack_predict(mode, data_set_name, algorithm_name, algorithm_config, fold):
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+def recpack_predict(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     fit_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                     f"config_{algorithm_config}/fold_{fold}/fit_log.json")
@@ -205,8 +208,8 @@ def recpack_predict(mode, data_set_name, algorithm_name, algorithm_config, fold)
         json.dump(predict_log_dict, file, indent=4)
 
 
-def recpack_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold):
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+def recpack_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     predict_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                         f"config_{algorithm_config}/fold_{fold}/predict_log.json")
@@ -221,12 +224,14 @@ def recpack_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold
         top_k_dict = json.load(file)
 
     top_k_dict = {int(k): v[0] for k, v in top_k_dict.items()}
+
     k_options = [1, 3, 5, 10, 20]
 
     start_evaluation = time.time()
-    ndcg_per_user_per_k = ndcg(top_k_dict, k_options, test, "user_id:token", "item_id:token")
-    hr_per_user_per_k = hr(top_k_dict, k_options, test, "user_id:token", "item_id:token")
-    recall_per_user_per_k = recall(top_k_dict, k_options, test, "user_id:token", "item_id:token")
+
+    mean_ndcg_per_k, mean_hr_per_k, mean_recall_per_k = metrics_lenskit(top_k_dict, k_options, test, "user_id:token",
+                                                                        "item_id:token")
+
     end_evaluation = time.time()
 
     evaluate_log_dict = {
@@ -240,13 +245,13 @@ def recpack_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold
     }
 
     for k in k_options:
-        score = sum(ndcg_per_user_per_k[k]) / len(ndcg_per_user_per_k[k])
+        score = mean_ndcg_per_k[k]
         print(f"NDCG@{k}: {score}")
         evaluate_log_dict[f"NDCG@{k}"] = score
-        score = sum(hr_per_user_per_k[k]) / len(hr_per_user_per_k[k])
+        score = mean_hr_per_k[k]
         print(f"HR@{k}: {score}")
         evaluate_log_dict[f"HR@{k}"] = score
-        score = sum(recall_per_user_per_k[k]) / len(recall_per_user_per_k[k])
+        score = mean_recall_per_k[k]
         print(f"Recall@{k}: {score}")
         evaluate_log_dict[f"Recall@{k}"] = score
 

@@ -10,14 +10,14 @@ from recbole.config import Config
 from recbole.data import create_dataset, data_preparation
 from recbole.quick_start import load_data_and_model
 from recbole.utils import ModelType, get_model, get_trainer, init_seed, init_logger
-from run_utils import ndcg, hr, recall
+from run_utils import ndcg, hr, recall, metrics_lenskit
 
 import torch
 from algorithm_config import retrieve_configurations
 from recbole.utils.case_study import full_sort_topk
 
 
-def recbole_fit(data_set_name, algorithm_name, algorithm_config, fold, **kwargs):
+def recbole_fit(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     setup_start_time = time.time()
 
     print(f"CUDA available: {torch.cuda.is_available()}")
@@ -80,7 +80,7 @@ def recbole_fit(data_set_name, algorithm_name, algorithm_config, fold, **kwargs)
         "dataset": data_set_name,  # default: None
     }
 
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
     config_dict.update(configurations[algorithm_config])
 
     config = Config(config_dict=config_dict)
@@ -152,13 +152,13 @@ def recbole_fit(data_set_name, algorithm_name, algorithm_config, fold, **kwargs)
         json.dump(fit_log_dict, file, indent=4)
 
 
-def recbole_predict(data_set_name, algorithm_name, algorithm_config, fold, **kwargs):
+def recbole_predict(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     print(f"CUDA available: {torch.cuda.is_available()}")
     print(f"CUDA version: {torch.version.cuda}")
     print(f"CUDNN version: {torch.backends.cudnn.version()}")
     print(f"PyTorch version: {torch.__version__}")
 
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     fit_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                     f"config_{algorithm_config}/fold_{fold}/fit_log.json")
@@ -214,13 +214,13 @@ def recbole_predict(data_set_name, algorithm_name, algorithm_config, fold, **kwa
         json.dump(predict_log_dict, file, indent=4)
 
 
-def recbole_evaluate(data_set_name, algorithm_name, algorithm_config, fold, **kwargs):
+def recbole_evaluate(mode, data_set_name, algorithm_name, algorithm_config, fold, num_samples=None, seed=None):
     print(f"CUDA available: {torch.cuda.is_available()}")
     print(f"CUDA version: {torch.version.cuda}")
     print(f"CUDNN version: {torch.backends.cudnn.version()}")
     print(f"PyTorch version: {torch.__version__}")
 
-    configurations = retrieve_configurations(algorithm_name=algorithm_name)
+    configurations = retrieve_configurations(algorithm_name=algorithm_name, num_samples=num_samples, seed=seed)
 
     predict_log_file = (f"./data_sets/{data_set_name}/checkpoint_{algorithm_name}/"
                         f"config_{algorithm_config}/fold_{fold}/predict_log.json")
@@ -241,12 +241,13 @@ def recbole_evaluate(data_set_name, algorithm_name, algorithm_config, fold, **kw
         top_k_dict = json.load(file)
 
     top_k_dict = {int(k): v[0] for k, v in top_k_dict.items()}
+    
     k_options = [1, 3, 5, 10, 20]
 
     start_evaluation = time.time()
-    ndcg_per_user_per_k = ndcg(top_k_dict, k_options, test, "user_id:token", "item_id:token")
-    hr_per_user_per_k = hr(top_k_dict, k_options, test, "user_id:token", "item_id:token")
-    recall_per_user_per_k = recall(top_k_dict, k_options, test, "user_id:token", "item_id:token")
+
+    mean_ndcg_per_k, mean_hr_per_k, mean_recall_per_k = metrics_lenskit(top_k_dict, k_options, test, "user_id:token", "item_id:token")
+
     end_evaluation = time.time()
 
     evaluate_log_dict = {
@@ -260,13 +261,13 @@ def recbole_evaluate(data_set_name, algorithm_name, algorithm_config, fold, **kw
     }
 
     for k in k_options:
-        score = sum(ndcg_per_user_per_k[k]) / len(ndcg_per_user_per_k[k])
+        score = mean_ndcg_per_k[k]
         print(f"NDCG@{k}: {score}")
         evaluate_log_dict[f"NDCG@{k}"] = score
-        score = sum(hr_per_user_per_k[k]) / len(hr_per_user_per_k[k])
+        score = mean_hr_per_k[k]
         print(f"HR@{k}: {score}")
         evaluate_log_dict[f"HR@{k}"] = score
-        score = sum(recall_per_user_per_k[k]) / len(recall_per_user_per_k[k])
+        score = mean_recall_per_k[k]
         print(f"Recall@{k}: {score}")
         evaluate_log_dict[f"Recall@{k}"] = score
 
